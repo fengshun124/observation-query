@@ -1,7 +1,6 @@
 Request information and files via Python scripts.
 
 
-
 ## About STARALT
 
 > Staralt is a program that shows the observability of objects in various ways: either you can plot altitude against time for a particular night (*Staralt*), or plot the path of your objects across the sky for a particular night (*Startrack*), or plot how altitude changes over a year (*Starobs*), or get a table with the best observing date for each object (*Starmult*).
@@ -33,13 +32,13 @@ along with a class `ClusterCoord` which generate the galactic Cartesian coordina
 and check their validility.
 Currently, the script only support selecting spherical area.
 But the adql query can be easily modified to conduct filtering.
-*NOTICE* that mock data retrieved contains a column named `phot_variable_flag` in the mock data,
-whose data type 'object' may not be handled properly by astropy.
-Hence, this column is converted into the bool value 
-according to [this issue](https://github.com/astropy/astropy/issues/5258).
 
-Only the mock query is tested for now.
-More testes are pending in the future.
+*NOTICE* that the data retrieved contains some columns in `numpy.object_` format, which seems not compatible with `astropy.table.Table.write` as it cannot be normally saved.
+Hence, the method `query_gaia.fix_data_type` is introduced.
+It converts those `numpy.object_` into `str`, which is acceptable by astropy. 
+A special treat for column `phot_variable_flag`, which will be converted to `bool` instead of `str` (I refer to [this issue](https://github.com/astropy/astropy/issues/5258) for this special case). 
+Please let me known if you have better solution.
+
 
 Future ToDo ~~🐦~~
 
@@ -48,3 +47,5 @@ Future ToDo ~~🐦~~
 - perform requests with preset configuration (maybe a JSON file or anything similar)
 
 - ! fix exception response handling
+
+- 3D scatter plot, Proper motion plot for the downloaded fits files.

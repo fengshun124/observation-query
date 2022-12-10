@@ -1,7 +1,7 @@
+import astropy.table
 import pyvo
 from astropy import units
 from astropy.coordinates import Distance, SkyCoord
-from astropy.table import Table
 
 
 class ClusterCoord:
@@ -93,7 +93,6 @@ class ClusterCoord:
                     self.__exception_handling(f'Conversion from from \'{galactic_coord_icrs}\' '
                                               f'and \'{galactic_coord_galactic}\' differs.\n'
                                               'It is strongly recommended to check the data')
-
             elif galactic_coord_icrs is not None:
                 self.galactic_x = galactic_coord_icrs.cartesian.x
                 self.galactic_y = galactic_coord_icrs.cartesian.y
@@ -138,50 +137,40 @@ class ClusterCoord:
             print(warning_text)
 
 
-def query_gaia_dr3(x_coord: float, y_coord: float, z_coord: float,
-                   selection_radius: float = 100, maxrec: int = 10000000,
-                   tap_host: str = 'https://gea.esac.esa.int/tap-server/tap'):
-    # construct Gaia DR3 query
-    obs_query = 'SELECT *,'
-    obs_query += '1000/g.parallax*cos(g.b*3.1415/180)*cos(g.l*3.1415/180) as X,'
-    obs_query += '1000/g.parallax*cos(g.b*3.1415/180)*sin(g.l*3.1415/180) as Y,'
-    obs_query += '1000/g.parallax*sin(g.b*3.1415/180) as Z '
-    obs_query += 'FROM gaiadr3.gaia_source as g '
-    obs_query += 'WHERE (g.parallax_over_error > 10) AND (g.astrometric_excess_noise < 1) AND '
-    obs_query += f'(sqrt(power((1000/g.parallax*cos(g.b*3.1415/180) * cos(g.l*3.1415/180) - ({x_coord})),2) + '
-    obs_query += f'power((1000/g.parallax*cos(g.b*3.1415/180) * sin(g.l*3.1415/180) - ({y_coord})),2) + '
-    obs_query += f'power((1000/g.parallax*sin(g.b*3.1415/180) - ({z_coord})),2)) < {selection_radius})'
-
-    obs_service = pyvo.dal.TAPService(tap_host)
-    obs_result = obs_service.run_async(obs_query, maxrec=maxrec)
-
-    # clear abnormal column 'phot_variable_flag'
-    # change variable type 'object' to 'bool'
-    src_col_data = obs_result['phot_variable_flag'].data
-    new_col = Table.Column(src_col_data, dtype='bool')
-    obs_result.replace_column('phot_variable_flag', new_col)
-
-    return obs_result.to_table()
+dict_TAP_server = {
+    # Gaia DR3
+    'obs': 'https://gea.esac.esa.int/tap-server/tap',
+    # Gaia EDR3 mock
+    'mock': 'https://dc.zah.uni-heidelberg.de/__system__/tap/run/tap'}
 
 
-def query_gaia_edr3_mock(x_coord: float, y_coord: float, z_coord: float,
-                         selection_radius: float = 100, maxrex: int = 16000000,
-                         tap_host: str = 'http://dc.zah.uni-heidelberg.de/__system__/tap/run/tap'):
-    # construct mock field query
-    mock_query = 'SELECT * '
-    mock_query += 'FROM gedr3mock.main as g '
-    mock_query += 'WHERE (g.parallax/g.parallax_error > 10) AND (g.popid!=11) AND '
-    mock_query += f'(sqrt(power((1000/g.parallax*cos(g.b*3.1415/180) * cos(g.l*3.1415/180) - ({x_coord})),2) + '
-    mock_query += f'power((1000/g.parallax*cos(g.b*3.1415/180) * sin(g.l*3.1415/180) - ({y_coord})),2) + '
-    mock_query += f'power((1000/g.parallax*sin(g.b*3.1415/180) - ({z_coord})),2)) < {selection_radius})'
+def tap_query(x_coord: float, y_coord: float, z_coord: float,
+              query_mode: str,
+              cut_radius: int = 100, maxrec: int = 10 ** 9) -> astropy.table.table.Table:
+    adql_query = ''
+    print(f'querying from {dict_TAP_server[query_mode]}', end='\r')
+    if query_mode == 'obs':
+        adql_query += 'SELECT *,'
+        adql_query += '1000/g.parallax*cos(g.b*3.1415/180)*cos(g.l*3.1415/180) as X,'
+        adql_query += '1000/g.parallax*cos(g.b*3.1415/180)*sin(g.l*3.1415/180) as Y,'
+        adql_query += '1000/g.parallax*sin(g.b*3.1415/180) as Z '
+        adql_query += 'FROM gaiadr3.gaia_source as g '
+        adql_query += 'WHERE (g.parallax_over_error > 10) AND (g.astrometric_excess_noise < 1) AND '
+    elif query_mode == 'mock':
+        adql_query += 'SELECT * '
+        adql_query += '1000/g.parallax*cos(g.b*3.1415/180)*cos(g.l*3.1415/180) as X,'
+        adql_query += '1000/g.parallax*cos(g.b*3.1415/180)*sin(g.l*3.1415/180) as Y,'
+        adql_query += '1000/g.parallax*sin(g.b*3.1415/180) as Z '
+        adql_query += 'FROM gedr3mock.main as g '
+        adql_query += 'WHERE (g.parallax/g.parallax_error > 10) AND (g.popid != 11) AND '
+    else:
+        raise Exception(f'\'{query_mode}\' should be \'obs\' or \'mock\'\n'
+                        'check the input mode')
+    adql_query += f'(sqrt(power((1000/g.parallax*cos(g.b*3.1415/180) * cos(g.l*3.1415/180) - ({x_coord})),2) + '
+    adql_query += f'power((1000/g.parallax*cos(g.b*3.1415/180) * sin(g.l*3.1415/180) - ({y_coord})),2) + '
+    adql_query += f'power((1000/g.parallax*sin(g.b*3.1415/180) - ({z_coord})),2)) < {cut_radius})'
 
-    mock_service = pyvo.dal.TAPService(tap_host)
-    mock_result = mock_service.run_async(mock_query, maxrec=maxrex)
+    tap_service = pyvo.dal.TAPService(dict_TAP_server[query_mode])
+    result = tap_service.run_async(adql_query, maxrec=maxrec)
 
-    # clear abnormal column 'phot_variable_flag'
-    # change variable type 'object' to 'bool'
-    src_col_data = mock_result['phot_variable_flag'].data
-    new_col = Table.Column(src_col_data, dtype='bool')
-    mock_result.replace_column('phot_variable_flag', new_col)
-
-    return mock_result.to_table()
+    return result.to_table()
