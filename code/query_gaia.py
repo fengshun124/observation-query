@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 
 import astropy.table
 import numpy as np
@@ -37,8 +38,6 @@ parser.add_argument('-z', '--galactic_z', type=float, dest='z', default=None,
 parser.add_argument('-s', '--strict_mode', type=bool, dest='strict', default=True,
                     help='whether to end the process if abnormal occurs, default TRUE')
 args = parser.parse_args()
-
-export_dir = 'src_data/'
 
 
 # TODO query star info from known catalogue or SIMBAD
@@ -104,6 +103,9 @@ def fix_data_type(table: astropy.table.Table) -> astropy.table.Table:
 
 if __name__ == "__main__":
     galactic_x, galactic_y, galactic_z, cut_radius, target_name = get_target_params()
+
+    export_dir = f'src_data/{target_name}/'
+    Path(export_dir).mkdir(parents=True, exist_ok=True)
 
     # info
     print(f'filtering cluster {target_name} with '
